@@ -205,6 +205,40 @@ static int load_rom_gfx1(void)
 	char fname[32], *parent;
 #endif
 
+#ifdef LIBRETRO
+	/* The decoder unshuffles complete 2 MiB blocks and indexes tiles from
+	 * the first 8 MiB of the region. Reject invalid definitions before it
+	 * can read outside the allocation. */
+	if (memory_length_gfx1 <= 0x800000 || (memory_length_gfx1 % 0x200000) || !num_gfx1rom)
+	{
+		fatalerror("Invalid CPS2 graphics region size: 0x%x", memory_length_gfx1);
+		return 0;
+	}
+	for (i = 0; i < num_gfx1rom; ++i)
+	{
+		const struct rom_t *rom = &gfx1rom[i];
+		uint64_t start = rom->offset, end;
+		if (rom->skip)
+		{
+			if ((rom->group != 1 && rom->group != 2) || rom->skip < 0 ||
+			    !rom->length || rom->length % rom->group)
+			{
+				fatalerror("Invalid CPS2 graphics ROM layout");
+				return 0;
+			}
+			if (rom->group == 1 && rom->type == ROM_WORDSWAP) start ^= 1;
+			end = start + ((uint64_t)rom->length / rom->group - 1) *
+			      ((uint64_t)rom->group + rom->skip) + rom->group;
+		}
+		else end = start + rom->length;
+		if (end > memory_length_gfx1)
+		{
+			fatalerror("CPS2 graphics ROM exceeds its declared region");
+			return 0;
+		}
+	}
+#endif
+
 	gfx_total_elements[TILE08] = (memory_length_gfx1 - 0x800000) >> 6;
 	gfx_total_elements[TILE16] = memory_length_gfx1 >> 7;
 	gfx_total_elements[TILE32] = (memory_length_gfx1 - 0x800000) >> 9;
@@ -243,9 +277,18 @@ static int load_rom_gfx1(void)
 	memset(gfx_pen_usage[TILE16], 0, gfx_total_elements[TILE16]);
 	memset(gfx_pen_usage[TILE32], 0, gfx_total_elements[TILE32]);
 
+#ifdef LIBRETRO
+	memory_region_gfx1 = (uint8_t *)calloc(1, memory_length_gfx1);
+	if (!memory_region_gfx1)
+	{
+		fatalerror("Could not allocate %u bytes for CPS2 graphics", memory_length_gfx1);
+		return 0;
+	}
+#else
 	memory_region_gfx1 = (uint8_t *)psp2k_mem_offset;
 	psp2k_mem_offset += memory_length_gfx1;
 	psp2k_mem_left -= memory_length_gfx1;
+#endif
 
 	parent = strlen(parent_name) ? parent_name : NULL;
 
@@ -266,9 +309,16 @@ static int load_rom_gfx1(void)
 		i = rom_load(gfx1rom, memory_region_gfx1, i, num_gfx1rom);
 
 		file_close();
+#ifdef LIBRETRO
+		if (fatal_error) return 0;
+#endif
 	}
 
+#ifdef LIBRETRO
+	lr_log(1, "Decoding CPS2 graphics for %s\n", game_name);
+#else
 	msg_printf(TEXT(DECODING_GFX), fname);
+#endif
 	cps2_gfx_decode();
 #endif
 
@@ -363,7 +413,11 @@ static int load_rom_info(const char *game_name)
 	machine_init_type    = 0;
 	machine_screen_type  = 0;
 
+	#ifdef LIBRETRO
+	snprintf(path, sizeof(path), "%s", lr_system_path("rominfo.cps2"));
+#else
 	sprintf(path, "%srominfo.cps2", launchDir);
+#endif
 
 	if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 	{
@@ -842,7 +896,7 @@ void memory_shutdown(void)
 
 	if (memory_region_cpu1)   free(memory_region_cpu1);
 	if (memory_region_cpu2)   free(memory_region_cpu2);
-#if USE_CACHE
+#if USE_CACHE || defined(LIBRETRO)
 	if (memory_region_gfx1)   free(memory_region_gfx1);
 #endif
 	if (memory_region_sound1) free(memory_region_sound1);

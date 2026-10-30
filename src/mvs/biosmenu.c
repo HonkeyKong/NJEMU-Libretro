@@ -232,6 +232,21 @@ static int bios_check(int flag)
 
 void bios_select(int flag)
 {
+#ifdef LIBRETRO
+    (void)flag;
+    neogeo_bios = -1;
+    const char *choice = lr_bios_choice();
+    for (unsigned i = 0; i < BIOS_MAX; ++i) {
+        if (strcmp(choice, "auto") && strcmp(choice, bios_name[i])) continue;
+        if (file_open(bios_zip, NULL, bios_crc[i], NULL) >= 0) {
+            file_close(); neogeo_bios = i; return;
+        }
+    }
+    file_close();
+    fatalerror("No supported BIOS in system/njemu/neogeo.zip");
+    return;
+#endif
+
 	int sel = 0, rows = 13, top = 0;
 	int i, prev_sel, update = 1;
 	int old_bios = neogeo_bios;

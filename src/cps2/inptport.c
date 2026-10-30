@@ -81,7 +81,13 @@ static uint8_t coin_chuter[COIN_MAX][4] =
 static void check_eeprom_settings(int popup)
 {
 	uint8_t eeprom_value = EEPROM_read_data(driver->inp_eeprom);
-	uint8_t coin_type = driver->inp_eeprom_value[eeprom_value];
+	uint8_t coin_type;
+
+	/* An uninitialized or corrupt EEPROM can contain any byte. Keep the
+	 * current defaults until the game writes a valid cabinet setting. */
+	if (eeprom_value >= sizeof(driver->inp_eeprom_value)) return;
+	coin_type = driver->inp_eeprom_value[eeprom_value];
+	if (coin_type >= COIN_MAX) return;
 
 	if (input_coin_chuter != coin_type)
 	{
@@ -759,6 +765,22 @@ void setup_autofire(void)
 
 void update_inputport(void)
 {
+#ifdef LIBRETRO
+    if (driver->inp_eeprom) check_eeprom_settings(0);
+    uint16_t combined[4];
+    memset(combined, 0xff, sizeof(combined));
+    for (option_controller = 0; option_controller < input_max_players; ++option_controller) {
+        lr_input_flags(input_flag, option_controller);
+        update_inputport0();
+        update_inputport1();
+        update_inputport2();
+        if (machine_input_type == INPTYPE_pzloop2) update_inputport3();
+        for (unsigned j = 0; j < 4; ++j) combined[j] &= cps2_port_value[j];
+    }
+    memcpy(cps2_port_value, combined, sizeof(combined));
+    option_controller = 0;
+    return;
+#endif
 	int i;
 	uint32_t buttons;
 

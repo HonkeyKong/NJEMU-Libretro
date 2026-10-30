@@ -11,6 +11,31 @@
 #include "emumain.h"
 
 #if USE_CACHE
+
+#ifdef LIBRETRO
+/* Altered for libretro: reject truncated metadata/blocks instead of consuming
+ * uninitialized data. Cache I/O remains synchronous on the calling thread. */
+static ssize_t lr_cache_read(int fd, void *dst, size_t count)
+{
+    ssize_t n = read(fd, dst, count);
+    if (n < 0 || (size_t)n != count) {
+        memset(dst, 0, count);
+        fatalerror("Truncated or unreadable cache file");
+    }
+    return n;
+}
+static size_t lr_cache_zread(int64_t fd, void *dst, size_t count)
+{
+    size_t n = zread(fd, dst, count);
+    if (n != count) {
+        memset(dst, 0, count);
+        fatalerror("Truncated or unreadable cache archive member");
+    }
+    return n;
+}
+#define read lr_cache_read
+#define zread lr_cache_zread
+#endif
 #ifdef LARGE_MEMORY
 #define MIN_CACHE_SIZE		0x40		// Lower limit, original 0x40, 4MB
 #else
@@ -661,7 +686,7 @@ int cache_start(void)
 {
 	int i, found;
 	uint32_t size = 0;
-	char version_str[8] = {0};
+	char version_str[9] = {0};
 #if (EMU_SYSTEM == MVS)
 	int32_t fd;
 #endif
@@ -727,10 +752,12 @@ int cache_start(void)
 				{
 					zread(cache_fd, gfx_pen_usage[2], memory_length_gfx3 / 128);
 					zclose(cache_fd);
+			cache_fd = -1;
 				}
 				else
 				{
 					zclose(cache_fd);
+			cache_fd = -1;
 					found = 0;
 				}
 			}
@@ -870,6 +897,7 @@ int cache_start(void)
 		else
 		{
 			close(cache_fd);
+			cache_fd = -1;
 			found = 0;
 		}
 	}
@@ -886,10 +914,12 @@ int cache_start(void)
 				zread(cache_fd, gfx_pen_usage[TILE32], gfx_total_elements[TILE32]);
 				zread(cache_fd, block_empty, MAX_CACHE_BLOCKS);
 				zclose(cache_fd);
+			cache_fd = -1;
 			}
 			else
 			{
 				zclose(cache_fd);
+			cache_fd = -1;
 				found = 0;
 			}
 		}
@@ -928,11 +958,28 @@ int cache_start(void)
 		return 0;
 	}
 
-	if ((GFX_MEMORY = (uint8_t *)malloc(GFX_SIZE + CACHE_SAFETY)) != NULL)
+	#ifdef LIBRETRO
+    if (fatal_error) return 0;
+#if EMU_SYSTEM == CPS2
+    if (cache_type == CACHE_RAWFILE) {
+        off_t end = lseek((int)cache_fd, 0, SEEK_END);
+        for (unsigned b = 0; b < MAX_CACHE_BLOCKS; ++b) {
+            if (block_offset[b] != BLOCK_EMPTY &&
+                (end < BLOCK_SIZE || block_offset[b] > (uint64_t)end - BLOCK_SIZE)) {
+                fatalerror("Invalid cache block offset"); return 0;
+            }
+        }
+    }
+#endif
+#endif
+    if ((GFX_MEMORY = (uint8_t *)malloc(GFX_SIZE + CACHE_SAFETY)) != NULL)
 	{
 		free(GFX_MEMORY);
 		GFX_MEMORY = (uint8_t *)malloc(GFX_SIZE);
-		memset(GFX_MEMORY, 0, GFX_SIZE);
+#ifdef LIBRETRO
+        if (!GFX_MEMORY) { fatalerror("Cannot allocate graphics cache"); return 0; }
+#endif
+        memset(GFX_MEMORY, 0, GFX_SIZE);
 
 		num_cache = GFX_SIZE >> 16;
 	}

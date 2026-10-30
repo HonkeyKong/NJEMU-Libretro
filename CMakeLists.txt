@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.12)
-project(NJEMU)
+if(PLATFORM STREQUAL "LIBRETRO")
+    project(NJEMU LANGUAGES C)
+else()
+    project(NJEMU)
+endif()
 
 # Configuration
 
@@ -34,6 +38,7 @@ set(PLATFORM_VALUES
     "PSP"     # 0
     "PS2"     # 1 
     "DESKTOP" # 2
+    "LIBRETRO"
 )
 list(FIND PLATFORM_VALUES ${PLATFORM} PLATFORM_INDEX)
 if (PLATFORM_INDEX EQUAL -1)
@@ -45,6 +50,10 @@ string(TOLOWER ${PLATFORM} PLATFORM_LOWER)
 
 # Add platform to compiler definitions
 add_definitions(-D${PLATFORM})
+if(PLATFORM STREQUAL "LIBRETRO")
+    include(cmake/Libretro.cmake)
+    return()
+endif()
 
 # Different options availables
 option(LARGE_MEMORY "Large Memory" OFF)

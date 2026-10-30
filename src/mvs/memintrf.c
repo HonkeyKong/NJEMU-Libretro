@@ -1319,7 +1319,11 @@ static int load_rom_info(const char *game_name)
 
 	disable_sound = 0;
 
+	#ifdef LIBRETRO
+	snprintf(path, sizeof(path), "%s", lr_system_path("rominfo.mvs"));
+#else
 	sprintf(path, "%srominfo.mvs", launchDir);
+#endif
 
 	if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 	{

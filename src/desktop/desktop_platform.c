@@ -12,6 +12,8 @@ void dbg_printf(const char *fmt, ...)
 	va_end(args);
 }
 
+/* Optional legacy tracing only applies to CPS hardware. */
+#if defined(NJEMU_DESKTOP_TRACE) && (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
 /* ---- DEBUG: 68000 PC + gfxram hash trace (desktop only) ---- */
 extern c68k_struc C68K;
 extern uint16_t cps1_gfxram[];
@@ -30,11 +32,14 @@ static void *pc_trace_thread(void *arg)
 	return NULL;
 }
 
+#endif
 static void *desktop_init(void) {
+#if defined(NJEMU_DESKTOP_TRACE) && (EMU_SYSTEM == CPS1 || EMU_SYSTEM == CPS2)
 	{
 		static pthread_t pt;
 		pthread_create(&pt, NULL, pc_trace_thread, NULL);
 	}
+#endif
 
 	desktop_platform_t *desktop = (desktop_platform_t*)calloc(1, sizeof(desktop_platform_t));
 

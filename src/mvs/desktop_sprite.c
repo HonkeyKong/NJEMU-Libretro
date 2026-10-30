@@ -91,7 +91,11 @@ void blit_start(int start, int end)
 		if (clear_fix_texture) blit_clear_fix_sprite();
 
 		video_driver->startWorkFrame(video_data, CNVCOL15TO32(video_palette[4095]));
-		video_driver->scissor(video_data, 24, 16, 336, 240);
+		#ifdef LIBRETRO
+        video_driver->scissor(video_data, 16, 16, 336, 240);
+#else
+        video_driver->scissor(video_data, 24, 16, 336, 240);
+#endif
 	}
 }
 
@@ -102,6 +106,10 @@ void blit_start(int start, int end)
 
 void blit_finish(void)
 {
+#ifdef LIBRETRO
+	/* Native output geometry and frontend rotation; no PSP-sized resampling. */
+	return;
+#endif
 	video_driver->transferWorkFrame(video_data, &mvs_src_clip, &mvs_clip[option_stretch]);
 }
 

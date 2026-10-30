@@ -77,9 +77,9 @@ uint8_t neogeo_memcard[0x2000];
 static uint8_t *memory_allocate(int type, uint32_t length)
 {
 	uint8_t *mem;
-	const char *region_name[6] =
+	const char *region_name[8] =
 	{
-		"CPU1","CPU2","GFX1","GFX2","SOUND1","USER1"
+		"CPU1","CPU2","GFX1","GFX2","GFX3","SOUND1","USER1","USER2"
 	};
 
 	if ((mem = malloc(length)) == NULL)
@@ -255,7 +255,11 @@ static int load_bios(void)
 	const char *lorom_name = "000-lo.lo";
 	char path[PATH_MAX];
 
+	#ifdef LIBRETRO
+	snprintf(path, sizeof(path), "%s", lr_system_path(bios_name));
+#else
 	sprintf(path, "%s%s", launchDir, bios_name);
+#endif
 
 	if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 	{
@@ -288,7 +292,11 @@ static int load_bios(void)
 			mem16[0xa87c >> 1] = 0x0010;
 			mem16[0xa87e >> 1] = 0xfdae;
 
-			sprintf(path, "%s%s", launchDir, lorom_name);
+			#ifdef LIBRETRO
+	snprintf(path, sizeof(path), "%s", lr_system_path(lorom_name));
+#else
+	sprintf(path, "%s%s", launchDir, lorom_name);
+#endif
 
 			if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 			{
@@ -408,6 +416,9 @@ void memory_shutdown(void)
 
 	sprintf(path, "%s%s", launchDir, "backup.bin");
 
+	#ifdef LIBRETRO
+	if (lr_initialized_machine)
+#endif
 	if ((fd = open(path, O_WRONLY|O_CREAT, 0777)) >= 0)
 	{
 		write(fd, neogeo_memcard, 0x2000);

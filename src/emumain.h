@@ -173,6 +173,10 @@ extern UI_PALETTE ui_palette[UI_PAL_MAX];
 #include "desktop/desktop.h"
 #endif
 
+#ifdef LIBRETRO
+#include "libretro/platform.h"
+#endif
+
 #include "include/osd_cpu.h"
 #include "include/cpuintrf.h"
 #include "include/memory.h"

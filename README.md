@@ -2,6 +2,8 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
+For the frontend-driven cores, see [Libretro build, content and validation documentation](LIBRETRO.md).
+
 ## Table of Contents
 
 - [Overview](#overview)
@@ -851,7 +853,9 @@ These ROM sets have different parent/clone relationships than MAME (bootleg-only
 
 ### CPS2-Specific Cache Notes
 
-**All CPS2 games require cache files** - create them with `romcnv_cps2`.
+The LIBRETRO CPS2 core loads and decodes graphics directly from ROM archives; it does not require a cache. The notes below apply to the existing cache-based platforms.
+
+**The cache-based CPS2 builds require cache files** - create them with `romcnv_cps2`.
 
 #### Special Cases
 

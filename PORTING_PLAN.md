@@ -1,3 +1,6 @@
+> Libretro implementation and validation are documented in [LIBRETRO.md](LIBRETRO.md).
+> The older platform status tables below describe the PSP/PS2/desktop port.
+
 # NJEMU Porting Plan
 
 This document outlines the remaining work needed to complete the cross-platform port of NJEMU.

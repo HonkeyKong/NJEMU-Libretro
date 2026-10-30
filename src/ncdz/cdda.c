@@ -230,6 +230,7 @@ static void neogeo_cdda_command(int command, int track)
 			cdda_play(track);
 			if (option_mp3_enable)
 			{
+				#ifndef LIBRETRO
 				if (flag)
 				{
 					do
@@ -237,6 +238,7 @@ static void neogeo_cdda_command(int command, int track)
 						usleep(10);
 					} while (!cdda_command_ack);
 				}
+#endif
 			}
 		}
 		break;

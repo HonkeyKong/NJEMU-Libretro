@@ -195,6 +195,7 @@ static void apply_cheat()
 	CPS Emulation Execute
 --------------------------------------------------------*/
 
+#ifndef LIBRETRO
 static void cps2_run(void)
 {
 	while (Loop >= LOOP_RESET)
@@ -235,6 +236,8 @@ static void cps2_run(void)
 }
 
 
+#endif /* !LIBRETRO: standalone execution loop */
+
 /******************************************************************************
 	Global Functions
 ******************************************************************************/
@@ -243,6 +246,7 @@ static void cps2_run(void)
 	CPS2 Emulation Main
 --------------------------------------------------------*/
 
+#ifndef LIBRETRO
 void cps2_main(void)
 {
 	Loop = LOOP_RESET;
@@ -277,3 +281,10 @@ void cps2_main(void)
 		show_fatal_error();
 	}
 }
+
+#endif /* !LIBRETRO: standalone machine main */
+
+#define LR_INIT cps2_init
+#define LR_RESET cps2_reset
+#define LR_EXIT cps2_exit
+#include "libretro/lifecycle.inc"

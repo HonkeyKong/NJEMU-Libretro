@@ -8,7 +8,7 @@
 
 #include <fcntl.h>
 #include <limits.h>
-#include <sys/unistd.h>
+#include <unistd.h>
 #include "emumain.h"
 
 void swab(const void *restrict src, void *restrict dest, ssize_t nbytes);
@@ -40,12 +40,31 @@ int64_t file_open(const char *fname1, const char *fname2, const uint32_t crc, ch
 	{
 		switch (i)
 		{
-		case 0: sprintf(path, "%s/%s.zip", game_dir, fname1); break;
-		case 1: sprintf(path, "%s/%s.zip", game_dir, fname2); break;
-		case 2: sprintf(path, "%sroms/%s.zip", launchDir, fname2); break;
+		case 0:
+            if (!fname1) continue;
+#ifdef LIBRETRO
+            if (!strcmp(fname1, game_name)) snprintf(path, sizeof(path), "%s", lr_content_archive());
+            else
+#endif
+            snprintf(path, sizeof(path), "%s/%s.zip", game_dir, fname1);
+            break;
+		case 1: if (!fname2 || !*fname2) continue; snprintf(path, sizeof(path), "%s/%s.zip", game_dir, fname2); break;
+		case 2:
+#ifdef LIBRETRO
+            { const char *bios = fname2 && *fname2 ? fname2 : fname1;
+              if (!bios || strcmp(bios, "neogeo")) continue;
+              char relative[64]; snprintf(relative, sizeof(relative), "%s.zip", bios);
+              snprintf(path, sizeof(path), "%s", lr_system_path(relative)); }
+#else
+            if (!fname2) continue;
+            sprintf(path, "%sroms/%s.zip", launchDir, fname2);
+#endif
+            break;
 		}
 
+		#ifndef LIBRETRO
 		printf("FOPEN_TRY: %s game_dir=%s launchDir=%s%c", path, game_dir, launchDir, 10);
+#endif
 		if (zip_open(path) != -1)
 		{
 			if (zip_findfirst(&file))
@@ -86,14 +105,16 @@ int64_t file_open(const char *fname1, const char *fname2, const uint32_t crc, ch
 			}
 		}
 
-		if (found || fname2 == NULL) break;
+		if (found) break;
 	}
 
 	if (found == 1)
 	{
-		if (fname) strcpy(fname, file.name);
+		/* fname is the caller's expected name and may be a small BIOS array.
+		 * Open the CRC-matched member directly without overwriting it. */
 		rom_fd = zopen(file.name);
-		return rom_fd;
+		/* Callers need status, not the private ZIP pointer (which may truncate). */
+		return rom_fd == -1 ? -1 : 0;
 	}
 	else if (found == 2)
 	{
@@ -226,7 +247,14 @@ _continue:
 
 	if (rom[idx].skip == 0)
 	{
-		file_read(&mem[offset], rom[idx].length);
+		#ifdef LIBRETRO
+        if (file_read(&mem[offset], rom[idx].length) != rom[idx].length) {
+            fatalerror("Truncated ROM member: %s", rom[idx].name);
+            return max;
+        }
+#else
+        file_read(&mem[offset], rom[idx].length);
+#endif
 
 		if (rom[idx].type == ROM_WORDSWAP)
 			swab(&mem[offset], &mem[offset], rom[idx].length);
@@ -263,6 +291,13 @@ _continue:
 				length += 2;
 			}
 		}
+#ifdef LIBRETRO
+		if (length != rom[idx].length)
+		{
+			fatalerror("Truncated interleaved ROM member: %s", rom[idx].name);
+			return max;
+		}
+#endif
 	}
 
 	if (++idx != max)

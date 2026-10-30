@@ -68,7 +68,7 @@
 #define SYSTEM_NAME				"CPS2"
 #define FPS						59.633333
 #define TICKS_PER_FRAME			16769.144773
-#ifdef LARGE_MEMORY
+#if defined(LARGE_MEMORY) || defined(LIBRETRO)
 #define USE_CACHE				0
 #else
 #define USE_CACHE				1

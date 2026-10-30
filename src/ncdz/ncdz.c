@@ -229,6 +229,7 @@ static void apply_cheat()
 	NEOGEO CDZ Emulation Execution
 --------------------------------------------------------*/
 
+#ifndef LIBRETRO
 static void neogeo_run(void)
 {
 	while (Loop >= LOOP_RESET)
@@ -279,6 +280,8 @@ static void neogeo_run(void)
 }
 
 
+#endif /* !LIBRETRO: standalone execution loop */
+
 /******************************************************************************
 	Global Functions
 ******************************************************************************/
@@ -307,6 +310,7 @@ void neogeo_bios_exit(void)
 	NEOGEO CDZ Emulation Start
 --------------------------------------------------------*/
 
+#ifndef LIBRETRO
 void neogeo_main(void)
 {
 	while (Loop >= LOOP_RESTART)
@@ -346,3 +350,10 @@ void neogeo_main(void)
 	}
 	ui_popup_reset();
 }
+
+#endif /* !LIBRETRO: standalone machine main */
+
+#define LR_INIT neogeo_init
+#define LR_RESET neogeo_reset
+#define LR_EXIT neogeo_exit
+#include "libretro/lifecycle.inc"

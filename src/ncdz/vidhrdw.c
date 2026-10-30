@@ -24,6 +24,17 @@
 ******************************************************************************/
 
 #include "ncdz.h"
+
+#ifdef LIBRETRO
+#define FIX_FIRST_COLUMN 0
+#define FIX_LAST_COLUMN 40
+#define SPRITE_CLIP_LEFT 16
+#else
+#define FIX_FIRST_COLUMN 1
+#define FIX_LAST_COLUMN 39
+#define SPRITE_CLIP_LEFT 24
+#endif
+
 #include "common/memory_sizes.h"
 #include <unistd.h>
 
@@ -100,7 +111,7 @@ static void draw_fix(void)
 {
 	uint16_t x, y, code, attr;
 
-	for (x = 8/8; x < 312/8; x++)
+	for (x = FIX_FIRST_COLUMN; x < FIX_LAST_COLUMN; x++)
 	{
 		uint16_t *vram = &neogeo_videoram[NEOGEO_VRAM_FIX + 2 + (x << 5)];
 
@@ -209,7 +220,7 @@ static void draw_sprites_hardware(uint32_t start, uint32_t end, int min_y, int m
 
 			zoom_x = (zoom_control >> 8) & 0x0f;
 
-			if ((x + zoom_x >= 24) && (x < 336))
+			if ((x + zoom_x >= SPRITE_CLIP_LEFT) && (x < 336))
 			{
 				sprite_list[num_sprites].x = x;
 				sprite_list[num_sprites].zoom_x = zoom_x + 1;
@@ -357,7 +368,7 @@ static void draw_sprites_software(uint32_t start, uint32_t end, int min_y, int m
 
 			zoom_x = (zoom_control >> 8) & 0x0f;
 
-			if ((x + zoom_x >= 24) && (x < 336))
+			if ((x + zoom_x >= SPRITE_CLIP_LEFT) && (x < 336))
 			{
 				sprite_list[num_sprites].x = x;
 				sprite_list[num_sprites].zoom_x = zoom_x + 1;
@@ -653,6 +664,7 @@ int neogeo_loading_screenrefresh(int flag, int draw)
 		limit = neogeo_cdspeed_limit;
 	}
 
+#ifndef LIBRETRO
 	if (limit)
 	{
 		uint64_t target = prev + CLOCKS_PER_SEC / FPS;
@@ -663,6 +675,7 @@ int neogeo_loading_screenrefresh(int flag, int draw)
 
 		prev = curr;
 	}
+#endif
 
 	pad_update();
 

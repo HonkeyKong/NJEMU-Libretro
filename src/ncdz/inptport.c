@@ -247,6 +247,20 @@ void setup_autofire(void)
 
 void update_inputport(void)
 {
+#ifdef LIBRETRO
+    uint8_t combined[3];
+    memset(combined, 0xff, sizeof(combined));
+    for (option_controller = 0; option_controller < 2; ++option_controller) {
+        lr_input_flags(input_flag, option_controller);
+        update_inputport0();
+        update_inputport1();
+        update_inputport2();
+        for (unsigned j = 0; j < 3; ++j) combined[j] &= neogeo_port_value[j];
+    }
+    memcpy(neogeo_port_value, combined, sizeof(combined));
+    option_controller = 0;
+    return;
+#endif
 	int i;
 	uint32_t buttons;
 

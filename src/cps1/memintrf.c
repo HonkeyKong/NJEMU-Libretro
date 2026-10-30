@@ -316,7 +316,11 @@ static int load_rom_info(const char *game_name)
 	machine_init_type    = 0;
 	machine_screen_type  = 0;
 
+	#ifdef LIBRETRO
+	snprintf(path, sizeof(path), "%s", lr_system_path("rominfo.cps1"));
+#else
 	sprintf(path, "%srominfo.cps1", launchDir);
+#endif
 
 	if ((fd = open(path, O_RDONLY, 0777)) >= 0)
 	{

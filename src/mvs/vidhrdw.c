@@ -19,6 +19,17 @@
 ******************************************************************************/
 
 #include "mvs.h"
+
+#ifdef LIBRETRO
+#define FIX_FIRST_COLUMN 0
+#define FIX_LAST_COLUMN 40
+#define SPRITE_CLIP_LEFT 16
+#else
+#define FIX_FIRST_COLUMN 1
+#define FIX_LAST_COLUMN 39
+#define SPRITE_CLIP_LEFT 24
+#endif
+
 #include "common/memory_sizes.h"
 
 
@@ -94,7 +105,7 @@ static void draw_fixed_layer_type0(void)
 {
 	uint16_t x, y, code, attr;
 
-	for (x = 8/8; x < 312/8; x++)
+	for (x = FIX_FIRST_COLUMN; x < FIX_LAST_COLUMN; x++)
 	{
 		uint16_t *vram = &neogeo_videoram[NEOGEO_VRAM_FIX + 2 + (x << 5)];
 
@@ -133,7 +144,7 @@ static void draw_fixed_layer_type1(void)
 		i += 2;
 	}
 
-	for (x = 8/8; x < 312/8; x++)
+	for (x = FIX_FIRST_COLUMN; x < FIX_LAST_COLUMN; x++)
 	{
 		uint16_t *vram = &neogeo_videoram[NEOGEO_VRAM_FIX + 2 + (x << 5)];
 
@@ -158,7 +169,7 @@ static void draw_fixed_layer_type2(void)
 {
 	uint16_t x, y, code, attr;
 
-	for (x = 8/8; x < 312/8; x++)
+	for (x = FIX_FIRST_COLUMN; x < FIX_LAST_COLUMN; x++)
 	{
 		uint16_t *vram = &neogeo_videoram[NEOGEO_VRAM_FIX + 2 + (x << 5)];
 
@@ -268,7 +279,7 @@ static void draw_sprites_hardware(int min_y, int max_y)
 
 			zoom_x = (zoom_control >> 8) & 0x0f;
 
-			if ((x + zoom_x >= 24) && (x < 336))
+			if ((x + zoom_x >= SPRITE_CLIP_LEFT) && (x < 336))
 			{
 				sprite_list[num_sprites].x = x;
 				sprite_list[num_sprites].zoom_x = zoom_x + 1;
@@ -416,7 +427,7 @@ static void draw_sprites_software(int min_y, int max_y)
 
 			zoom_x = (zoom_control >> 8) & 0x0f;
 
-			if ((x + zoom_x >= 24) && (x < 336))
+			if ((x + zoom_x >= SPRITE_CLIP_LEFT) && (x < 336))
 			{
 				sprite_list[num_sprites].x = x;
 				sprite_list[num_sprites].zoom_x = zoom_x + 1;

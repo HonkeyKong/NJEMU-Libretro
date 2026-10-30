@@ -687,6 +687,31 @@ void setup_autofire(void)
 
 void update_inputport(void)
 {
+#ifdef LIBRETRO
+    check_input_mode();
+    neogeo_port_value[3] = neogeo_input_mode ? neogeo_dipswitch & 0xff : 0xff;
+    uint8_t combined[6];
+    memset(combined, 0xff, sizeof(combined));
+    for (option_controller = 0; option_controller < 2; ++option_controller) {
+        lr_input_flags(input_flag, option_controller);
+        if (neogeo_ngh == NGH_irrmaze && option_controller == 0) {
+            input_analog_value[0] = (input_analog_value[0] + input_flag[P1_LEFT] - input_flag[P1_RIGHT]) & 255;
+            input_analog_value[1] = (input_analog_value[1] + input_flag[P1_UP] - input_flag[P1_DOWN]) & 255;
+        } else if (neogeo_ngh == NGH_popbounc) {
+            input_analog_value[option_controller] += (input_flag[P1_RIGHT] - input_flag[P1_LEFT]) * 3;
+            Limit(input_analog_value[option_controller], 255, 0);
+        }
+        update_inputport0();
+        update_inputport1();
+        update_inputport2();
+        update_inputport4();
+        update_inputport5();
+        for (unsigned j = 0; j < 6; ++j) combined[j] &= neogeo_port_value[j];
+    }
+    memcpy(neogeo_port_value, combined, sizeof(combined));
+    option_controller = 0;
+    return;
+#endif
 	int i;
 	uint32_t buttons;
 

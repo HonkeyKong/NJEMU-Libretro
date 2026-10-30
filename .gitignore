@@ -1,0 +1,4 @@
+
+# Local CMake validation builds
+/build_libretro_*/
+/build_desktop_*/

@@ -24,7 +24,7 @@ ui_text_driver_t *ui_text_drivers[] = {
 #ifdef PS2
 	&ui_text_ps2,
 #endif
-#ifdef DESKTOP
+#if defined(DESKTOP) || defined(LIBRETRO)
 	&ui_text_desktop,
 #endif
 	&ui_text_null,

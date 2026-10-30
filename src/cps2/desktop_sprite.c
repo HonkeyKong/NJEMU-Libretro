@@ -184,6 +184,10 @@ void blit_start(int start, int end)
 
 void blit_finish(void)
 {
+#ifdef LIBRETRO
+	/* Native output geometry and frontend rotation; no PSP-sized resampling. */
+	return;
+#endif
 	if (cps2_has_mask) video_driver->clearFrame(video_data, COMMON_GRAPHIC_OBJECTS_DRAW_FRAME_BUFFER);
 
 	if (cps_rotate_screen)

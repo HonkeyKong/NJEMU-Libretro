@@ -2698,6 +2698,7 @@ static int configGetLanguage() {
 static void *desktop_init(void)
 {
 	desktop_ui_text_t *desktop = (desktop_ui_text_t*)calloc(1, sizeof(desktop_ui_text_t));
+	if (!desktop) return NULL;
 	int i;
 
     switch (configGetLanguage())

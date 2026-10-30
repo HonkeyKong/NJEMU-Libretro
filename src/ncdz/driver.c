@@ -120,6 +120,9 @@ int neogeo_check_game(void)
 		zip_open(game_dir);
 
 		i = zlength("IPL.TXT");
+#ifdef LIBRETRO
+        if (i <= 0 || i >= 0x100000) { zip_close(); return 0; }
+#endif
 
 		if ((fd = zopen("IPL.TXT")) == -1)
 		{
@@ -130,6 +133,25 @@ int neogeo_check_game(void)
 		zclose(fd);
 		zip_close();
 
+#ifdef LIBRETRO
+        /* Parse the already-read manifest without creating IPL.TMP. */
+        memory_region_cpu1[i] = 0;
+        char *cursor = (char *)memory_region_cpu1;
+        while (*cursor) {
+            char *eol = strchr(cursor, '\n');
+            if (eol) *eol = 0;
+            char name[16], bank_text[16], offset_text[32], extra;
+            if (sscanf(cursor, " %15[^,],%15[^,],%31[^\r\n]%c", name, bank_text, offset_text, &extra) >= 3) {
+                char *ext = strrchr(name, '.');
+                if (ext && (!strcasecmp(ext, ".PRG") || !strcasecmp(ext, ".ARG")) &&
+                    strtoul(bank_text, NULL, 10) == 0 && strtoul(offset_text, NULL, 16) == 0) {
+                    strcpy(fname, name); found = 1; break;
+                }
+            }
+            if (!eol) break;
+            cursor = eol + 1;
+        }
+#else
 		if ((fp = fopen(path, "w")) == NULL)
 		{
 			return 0;
@@ -171,6 +193,8 @@ int neogeo_check_game(void)
 		fclose(fp);
 
 		remove(path);
+
+#endif
 
 		if (!found) return 0;
 

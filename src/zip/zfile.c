@@ -130,12 +130,12 @@ int64_t zopen(const char *filename)
 
 		strcpy(basedirend, filename);
 		fd = open(basedir, O_RDONLY, 0777);
-		return (fd < 0) ? -1 : (long)fd;
+		return (fd < 0) ? -1 : (int64_t)fd;
 	}
 
 	if (unzLocateFile(unzfile, filename) == UNZ_OK)
 		if (unzOpenCurrentFile(unzfile) == UNZ_OK)
-			return (long)unzfile;
+			return (int64_t)(intptr_t)unzfile;
 
 	return -1;
 }
@@ -156,7 +156,11 @@ int zclose(int64_t fd)
 		if (fd != -1) close((int32_t)fd);
 		return 0;
 	}
-	return unzCloseCurrentFile(unzfile);
+    int result = unzCloseCurrentFile(unzfile);
+#ifdef LIBRETRO
+    if (result == UNZ_CRCERROR) fatalerror("Archive member CRC check failed");
+#endif
+    return result;
 }
 
 
@@ -166,10 +170,13 @@ int zclose(int64_t fd)
 
 size_t zread(int64_t fd, void *buf, size_t size)
 {
-	if (unzfile == NULL)
-		return read((int32_t)fd, buf, size);
-
-	return unzReadCurrentFile(unzfile, buf, size);
+    int64_t n;
+    if (unzfile == NULL) n = read((int32_t)fd, buf, size);
+    else n = unzReadCurrentFile(unzfile, buf, size);
+#ifdef LIBRETRO
+    if (n < 0) { fatalerror("Archive read/decompression error"); return 0; }
+#endif
+    return n;
 }
 
 
@@ -185,7 +192,12 @@ int zgetc(int64_t fd)
 			zip_cached_len = read((int32_t)fd, zip_cache, 4096);
 		else
 			zip_cached_len = unzReadCurrentFile(unzfile, zip_cache, 4096);
-		if (zip_cached_len == 0) return EOF;
+		#ifdef LIBRETRO
+        if (zip_cached_len > sizeof(zip_cache)) {
+            zip_cached_len = 0; fatalerror("Archive byte read failed"); return EOF;
+        }
+#endif
+        if (zip_cached_len == 0) return EOF;
 		zip_filepos = 0;
 	}
 	zip_cached_len--;

@@ -322,3 +322,21 @@ void sound_mute(int mute)
 	else
 		sound_thread_enable(option_sound_enable);
 }
+
+#ifdef LIBRETRO
+/* Generate one frame synchronously after its CPU/timer schedule. No resampling
+ * from a thread-sized block; the chips already use sound->frequency. */
+void lr_sound_update(int16_t *dst, unsigned frames)
+{
+    memset(stream_buffer_left, 0, sizeof(stream_buffer_left));
+    memset(stream_buffer_right, 0, sizeof(stream_buffer_right));
+    sound->callback(stream_buffer, frames);
+    for (unsigned i = 0; i < frames; ++i) {
+        int32_t l = stream_buffer_left[i];
+        int32_t r = sound->channels == 1 ? l : stream_buffer_right[i];
+        Limit(l, MAXOUT, MINOUT);
+        Limit(r, MAXOUT, MINOUT);
+        dst[2*i] = l; dst[2*i+1] = r;
+    }
+}
+#endif

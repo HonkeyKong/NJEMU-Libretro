@@ -222,7 +222,8 @@ void cps2_gfx_decode(void)
 
 	for (i = 0; i < memory_length_gfx1 / 4; i++)
 	{
-		uint32_t src = gfx[4 * i] + (gfx[4 * i + 1] << 8) + (gfx[4 * i + 2] << 16) + (gfx[4 * i + 3] << 24);
+		uint32_t src = (uint32_t)gfx[4 * i] | ((uint32_t)gfx[4 * i + 1] << 8)
+		             | ((uint32_t)gfx[4 * i + 2] << 16) | ((uint32_t)gfx[4 * i + 3] << 24);
 		uint32_t dw = 0;
 
 		for (j = 0; j < 8; j++)
@@ -235,7 +236,7 @@ void cps2_gfx_decode(void)
 			if (mask & 0x00ff0000) n |= 4;
 			if (mask & 0xff000000) n |= 8;
 
-			dw |= n << (j << 2);
+			dw |= (uint32_t)n << (j << 2);
 		}
 
 		data = ((dw & 0x0000000f) >>  0) | ((dw & 0x000000f0) <<  4)
@@ -256,7 +257,8 @@ void cps2_gfx_decode(void)
 
 		for (j = 0; j < 8; j++)
 		{
-			data = ~(*tile + 1);
+			/* Scroll1 renders the second 32-bit word of each 8-byte row. */
+			data = ~tile[1];
 			tile += 2;
 
 			if (data)

@@ -718,6 +718,11 @@ int cdrom_process_ipl(void)
 
 	memset(cdrom_cache, 0, 0x800);
 	length = zlength("IPL.TXT");
+#ifdef LIBRETRO
+    if (length == 0 || length >= 0x10000) {
+        zip_close(); fatalerror("Missing or oversized IPL.TXT"); return 0;
+    }
+#endif
 
     if ((f = zopen("IPL.TXT")) == -1)
     {
@@ -725,8 +730,15 @@ int cdrom_process_ipl(void)
 		return 0;
 	}
 
-	zread(f, cdrom_cache, length);
-	zclose(f);
+	#ifdef LIBRETRO
+    if (zread(f, cdrom_cache, length) != length) {
+        zclose(f); zip_close(); fatalerror("Truncated IPL.TXT"); return 0;
+    }
+    cdrom_cache[length] = 0;
+#else
+    zread(f, cdrom_cache, length);
+#endif
+    zclose(f);
 
 	total_sectors = 0;
 	loaded_sectors = 0;
@@ -734,6 +746,46 @@ int cdrom_process_ipl(void)
 
 	p = buf = (char *)cdrom_cache;
 
+#ifdef LIBRETRO
+    char *end = buf + length;
+    while (buf < end && *buf) {
+        p = memchr(buf, '\n', end - buf);
+        char *next = p ? p + 1 : end;
+        if (p) *p = 0;
+        if (*buf != '\r' && *buf != '\n' && *buf) {
+            unsigned bank, offset;
+            char name[16], tail;
+            if (total_files >= 32 || sscanf(buf, "%15[^,],%u,%x %c", name, &bank, &offset, &tail) != 3 ||
+                !strrchr(name, '.') || strchr(name, '/') || strchr(name, '\\') || bank > 3) goto bad_ipl;
+            for (unsigned c = 0; name[c]; ++c) name[c] = toupper((unsigned char)name[c]);
+            strcpy(file->name, name);
+            char *extension = strrchr(file->name, '.') + 1;
+            if (*extension == 'O') strcpy(extension, "SPR");
+            file->type = get_filetype(extension);
+            file->bank = bank; file->offset = offset;
+            file->length = zlength(file->name);
+            if (!file->length || file->length > 0x400000 || file->type == UNKNOWN_TYPE) goto bad_ipl;
+            unsigned limit = 0, start = offset;
+            switch (file->type) {
+                case PRG_TYPE: case AXX_TYPE: limit = memory_length_cpu1; break;
+                case FIX_TYPE: limit = memory_length_gfx1; start >>= 1; break;
+                case SPR_TYPE: limit = memory_length_gfx2; start += bank * 0x100000; break;
+                case Z80_TYPE: limit = memory_length_cpu2; start >>= 1; break;
+                case PCM_TYPE: limit = memory_length_sound1; start = (start >> 1) + bank * 0x80000; break;
+                case PAT_TYPE: limit = memory_length_cpu1; break;
+            }
+            if (start > limit || file->length > limit - start) goto bad_ipl;
+            file->sectors = (file->length + 0x7ff) / 0x800;
+            total_sectors += file->sectors; ++total_files; ++file;
+        }
+        buf = next;
+    }
+    if (!total_files) goto bad_ipl;
+    goto valid_ipl;
+bad_ipl:
+    zip_close(); fatalerror("Invalid IPL.TXT or missing/oversized disc file"); return 0;
+valid_ipl:
+#else
     while ((uintptr_t)p - (uintptr_t)cdrom_cache < length)
 	{
 		memset(linebuf, 0, 32);
@@ -788,6 +840,8 @@ int cdrom_process_ipl(void)
 		file++;
 	}
 
+#endif
+
 	m68000_write_memory_8(0x108000 + 0x7ddc, 0x01);
 
 	init_loading_progress();
@@ -796,7 +850,7 @@ int cdrom_process_ipl(void)
 	for (i = 0; i < total_files; i++)
 	{
 		if (Loop != LOOP_EXEC) return 1;
-		load_file(i);
+		if (load_file(i) < 0) { zip_close(); return 0; }
 	}
 
 	loading_screen_stop();

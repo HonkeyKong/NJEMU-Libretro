@@ -950,6 +950,22 @@ void setup_autofire(void)
 
 void update_inputport(void)
 {
+#ifdef LIBRETRO
+    uint16_t combined[4];
+    memset(combined, 0xff, sizeof(combined));
+    for (option_controller = 0; option_controller < input_max_players; ++option_controller) {
+        lr_input_flags(input_flag, option_controller);
+        update_inputport0();
+        update_inputport1();
+        update_inputport2();
+        update_inputport3();
+        if (machine_input_type == INPTYPE_forgottn) forgottn_update_dial();
+        for (unsigned j = 0; j < 4; ++j) combined[j] &= cps1_port_value[j];
+    }
+    memcpy(cps1_port_value, combined, sizeof(combined));
+    option_controller = 0;
+    return;
+#endif
 	int i, serv_switch = 0;
 	uint32_t buttons;
 

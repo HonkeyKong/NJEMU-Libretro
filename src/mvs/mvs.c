@@ -266,6 +266,7 @@ static void apply_cheat()
 	MVS Emulator Run
 --------------------------------------------------------*/
 
+#ifndef LIBRETRO
 static void neogeo_run(void)
 {
 	while (Loop >= LOOP_RESET)
@@ -303,6 +304,8 @@ static void neogeo_run(void)
 }
 
 
+#endif /* !LIBRETRO: standalone execution loop */
+
 /******************************************************************************
 	Global Functions
 ******************************************************************************/
@@ -311,6 +314,7 @@ static void neogeo_run(void)
 	MVS Emulator Main
 --------------------------------------------------------*/
 
+#ifndef LIBRETRO
 void neogeo_main(void)
 {
 	Loop = LOOP_RESET;
@@ -345,3 +349,10 @@ void neogeo_main(void)
 		show_fatal_error();
 	}
 }
+
+#endif /* !LIBRETRO: standalone machine main */
+
+#define LR_INIT neogeo_init
+#define LR_RESET neogeo_reset
+#define LR_EXIT neogeo_exit
+#include "libretro/lifecycle.inc"

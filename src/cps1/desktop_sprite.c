@@ -178,6 +178,10 @@ void blit_start(int high_layer)
 
 void blit_finish(void)
 {
+#ifdef LIBRETRO
+	/* Native output geometry and frontend rotation; no PSP-sized resampling. */
+	return;
+#endif
 	if (cps_rotate_screen)
 	{
 		if (cps_flip_screen)
