@@ -370,6 +370,8 @@ static void z80_set_bank(uint32_t offset)
 TIMER_CALLBACK( cps1_vblank_interrupt )
 {
 	m68000_set_irq_line(2, HOLD_LINE);
+	if (cps1_sf2hf_timing)
+		cps1_sf2hf_frame_reset();
 	if (!skip_this_frame())
 	{
 		cps1_screenrefresh();

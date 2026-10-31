@@ -42,6 +42,7 @@ extern int cps_flip_screen;
 extern int cps_raster_enable;
 #endif
 extern uint16_t video_palette[CPS1_PALETTE_ENTRIES];
+extern int cps1_sf2hf_timing;
 
 void cps1_scan_object(void);
 void cps1_scan_scroll1(void);
@@ -59,6 +60,10 @@ void cps1_objram_latch(void);
 
 READ16_HANDLER( cps1_output_r );
 WRITE16_HANDLER( cps1_output_w );
+
+void cps1_sf2hf_gfxram_steal(uint32_t offset);
+void cps1_sf2hf_cps_reg_steal(void);
+void cps1_sf2hf_frame_reset(void);
 
 #ifdef SAVE_STATE
 STATE_SAVE( video );

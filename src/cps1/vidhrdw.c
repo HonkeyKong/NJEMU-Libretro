@@ -164,6 +164,106 @@ WRITE16_HANDLER( cps1_output_w )
 
 
 /******************************************************************************
+	SF2 Hyper Fighting Bus Contention
+
+	sf2hf runs its game loop unthrottled instead of waiting for VBlank, so its
+	speed depends on how long the 68000 is held off the bus when it touches the
+	CPS-A/CPS-B customs and gfxram. Those accesses are otherwise instantaneous
+	here, making the game run too fast. Model the wait states by stealing
+	cycles per access (values tuned against real hardware timing in MAME).
+******************************************************************************/
+
+#define SF2HF_CPS_REG_WAIT_CYCLES			7
+#define SF2HF_GFXRAM_WAIT_SCROLL_CYCLES		20
+#define SF2HF_GFXRAM_WAIT_OBJ_CYCLES		112
+#define SF2HF_GFXRAM_WAIT_OTHER_CYCLES		40
+#define SF2HF_GFXRAM_WAIT_PALETTE_CYCLES	20
+#define SF2HF_GFXRAM_WAIT_UNKNOWN_CYCLES	29
+#define SF2HF_OBJ_BURST_THRESHOLD			384
+#define SF2HF_OBJ_BURST_EXTRA_CYCLES		12
+
+#define SF2HF_GFXRAM_WORDS		(CPS1_GFXRAM_SIZE >> 1)
+#define SF2HF_PAGE_SHIFT		13
+#define SF2HF_PAGE_MASK			0x0f
+
+int cps1_sf2hf_timing;
+static uint32_t sf2hf_frame_obj_writes;
+
+
+static uint32_t sf2hf_reg_word_base(uint16_t port, uint32_t boundary)
+{
+	uint32_t base = ((uint32_t)port << 8) & ~(boundary - 1);
+
+	return ((base & 0x3ffff) >> 1) % SF2HF_GFXRAM_WORDS;
+}
+
+static int sf2hf_range_contains(uint32_t word, uint32_t start, uint32_t size_words)
+{
+	if (start + size_words <= SF2HF_GFXRAM_WORDS)
+		return word >= start && word < start + size_words;
+
+	return word >= start || word < (start + size_words) % SF2HF_GFXRAM_WORDS;
+}
+
+static int sf2hf_gfxram_wait_cycles(uint32_t word)
+{
+	uint16_t obj_port = cps1_port(CPS1_OBJ_BASE);
+
+	if (sf2hf_range_contains(word, sf2hf_reg_word_base(cps1_port(CPS1_SCROLL1_BASE), 0x4000), 0x4000 >> 1)
+	||	sf2hf_range_contains(word, sf2hf_reg_word_base(cps1_port(CPS1_SCROLL2_BASE), 0x4000), 0x4000 >> 1)
+	||	sf2hf_range_contains(word, sf2hf_reg_word_base(cps1_port(CPS1_SCROLL3_BASE), 0x4000), 0x4000 >> 1))
+		return SF2HF_GFXRAM_WAIT_SCROLL_CYCLES;
+
+	/* SF2-family code alternates sprite writes between the 0x9100 and 0x9180 pages */
+	if (sf2hf_range_contains(word, sf2hf_reg_word_base(obj_port, 0x800), 0x800 >> 1)
+	||	sf2hf_range_contains(word, sf2hf_reg_word_base(obj_port ^ 0x0080, 0x800), 0x800 >> 1))
+	{
+		if (++sf2hf_frame_obj_writes > SF2HF_OBJ_BURST_THRESHOLD)
+			return SF2HF_GFXRAM_WAIT_OBJ_CYCLES + SF2HF_OBJ_BURST_EXTRA_CYCLES;
+		return SF2HF_GFXRAM_WAIT_OBJ_CYCLES;
+	}
+
+	if (((word >> SF2HF_PAGE_SHIFT) & SF2HF_PAGE_MASK) == ((cps1_port(CPS1_OTHER_BASE) >> 6) & SF2HF_PAGE_MASK))
+		return SF2HF_GFXRAM_WAIT_OTHER_CYCLES;
+
+	if (sf2hf_range_contains(word, sf2hf_reg_word_base(cps1_port(CPS1_PALETTE_BASE), 0x400), CPS1_PALETTE_ENTRIES))
+		return SF2HF_GFXRAM_WAIT_PALETTE_CYCLES;
+
+	return SF2HF_GFXRAM_WAIT_UNKNOWN_CYCLES;
+}
+
+
+/*------------------------------------------------------
+	Steal cycles for a gfxram write (offset: 68000 address)
+------------------------------------------------------*/
+
+void cps1_sf2hf_gfxram_steal(uint32_t offset)
+{
+	timer_steal_cycles(CPU_M68000, sf2hf_gfxram_wait_cycles((offset - 0x900000) >> 1));
+}
+
+
+/*------------------------------------------------------
+	Steal cycles for a CPS-A write / CPS-B read or write
+------------------------------------------------------*/
+
+void cps1_sf2hf_cps_reg_steal(void)
+{
+	timer_steal_cycles(CPU_M68000, SF2HF_CPS_REG_WAIT_CYCLES);
+}
+
+
+/*------------------------------------------------------
+	Reset per-frame object write count (VBlank)
+------------------------------------------------------*/
+
+void cps1_sf2hf_frame_reset(void)
+{
+	sf2hf_frame_obj_writes = 0;
+}
+
+
+/******************************************************************************
 	CPS1 Video Rendering
 ******************************************************************************/
 
@@ -463,6 +563,12 @@ int cps1_video_init(void)
 	cps1_has_stars = driver->has_stars;
 	cps1_kludge    = driver->kludge;
 
+	cps1_sf2hf_timing = !strcmp(game_name, "sf2hf")
+	                 || !strcmp(game_name, "sf2hfu")
+	                 || !strcmp(game_name, "sf2hfj")
+	                 || !strcmp(game_name, "sf2t")
+	                 || !strcmp(game_name, "sf2tj");
+
 #if !RELEASE
 	if (strcmp(game_name, "sf2rb") == 0)
 	{
@@ -527,6 +633,8 @@ void cps1_video_reset(void)
 	memset(cps1_output, 0, sizeof(cps1_output));
 
 	memset(cps1_object, 0, sizeof(cps1_object));
+
+	sf2hf_frame_obj_writes = 0;
 
 	memset(cps1_old_palette, 0, sizeof(cps1_old_palette));
 	memset(video_palette, 0, sizeof(video_palette));
@@ -1532,12 +1640,16 @@ STATE_SAVE( video )
 {
 	state_save_byte(cps1_old_palette, sizeof(cps1_old_palette));
 	state_save_byte(video_palette, sizeof(video_palette));
+	if (cps1_sf2hf_timing)
+		state_save_long(&sf2hf_frame_obj_writes, 1);
 }
 
 STATE_LOAD( video )
 {
 	state_load_byte(cps1_old_palette, sizeof(cps1_old_palette));
 	state_load_byte(video_palette, sizeof(video_palette));
+	if (cps1_sf2hf_timing)
+		state_load_long(&sf2hf_frame_obj_writes, 1);
 	cps1_objram_latch();
 
 	cps1_high_layer = 0;

@@ -25,6 +25,7 @@ void m68000_init(void);
 void m68000_reset(void);
 void m68000_exit(void);
 int  m68000_execute(int cycles);
+uint64_t m68000_get_total_cycles(void);
 #if (EMU_SYSTEM == NCDZ)
 void m68000_execute2(uint32_t start_pc, uint32_t break_point);
 #endif

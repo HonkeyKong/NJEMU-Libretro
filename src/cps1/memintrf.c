@@ -779,6 +779,7 @@ uint8_t m68000_read_memory_8(uint32_t offset)
 		return qsound_rom_r(offset >> 1, mem_mask) >> shift;
 
 	case 0x80:
+		if (cps1_sf2hf_timing && (offset & 0xffc0) == 0x0140) cps1_sf2hf_cps_reg_steal();
 		switch (offset & 0xffe)
 		{
 		case 0x000: return cps1_inputport1_r(0, mem_mask) >> shift;
@@ -869,6 +870,7 @@ uint16_t m68000_read_memory_16(uint32_t offset)
 		return qsound_rom_r(offset >> 1, 0);
 
 	case 0x80:
+		if (cps1_sf2hf_timing && (offset & 0xffc0) == 0x0140) cps1_sf2hf_cps_reg_steal();
 		switch (offset & 0xffe)
 		{
 		case 0x000: return cps1_inputport1_r(0, 0);
@@ -952,10 +954,12 @@ void m68000_write_memory_8(uint32_t offset, uint8_t data)
 	case 0x90:
 	case 0x91:
 	case 0x92:
+		if (cps1_sf2hf_timing) cps1_sf2hf_gfxram_steal(offset);
 		WRITE_BYTE(static_ram2, offset, data);
 		return;
 
 	case 0x80:
+		if (cps1_sf2hf_timing && (offset & 0xff80) == 0x0100) cps1_sf2hf_cps_reg_steal();
 		switch (offset & 0xffe)
 		{
 		case 0x030: cps1_coinctrl_w(offset >> 1, data << shift, mem_mask); return;
@@ -1022,6 +1026,7 @@ void m68000_write_memory_16(uint32_t offset, uint16_t data)
 	case 0x90:
 	case 0x91:
 	case 0x92:
+		if (cps1_sf2hf_timing) cps1_sf2hf_gfxram_steal(offset);
 		WRITE_WORD(static_ram2, offset, data);
 		return;
 
@@ -1030,6 +1035,7 @@ void m68000_write_memory_16(uint32_t offset, uint16_t data)
 		return;
 
 	case 0x80:
+		if (cps1_sf2hf_timing && (offset & 0xff80) == 0x0100) cps1_sf2hf_cps_reg_steal();
 		switch (offset & 0xffe)
 		{
 		case 0x030: cps1_coinctrl_w(offset >> 1, data, 0); return;

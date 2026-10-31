@@ -10,7 +10,7 @@ string(TOLOWER "${TARGET}" target_lower)
 set(core njemu_${target_lower}_libretro)
 set(src
   src/libretro/core.c src/libretro/runtime.c src/libretro/video.c
-  src/libretro/audio.c src/libretro/input.c src/libretro/ui.c
+  src/libretro/audio.c src/libretro/input.c src/libretro/ui.c src/libretro/libretro_ext.c
   src/desktop/desktop_ui_text.c src/common/ui_text_driver.c
   src/common/filer.c src/common/loadrom.c src/common/cache.c
   src/zip/zfile.c src/zip/unzip.c src/sound/sndintrf.c

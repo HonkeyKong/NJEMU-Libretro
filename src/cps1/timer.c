@@ -274,6 +274,17 @@ void timer_set(int which, float duration, int param, void (*callback)(int param)
 
 
 /*------------------------------------------------------
+	Steal Cycles From Running CPU (bus wait states)
+------------------------------------------------------*/
+
+void timer_steal_cycles(int cpunum, int cycles)
+{
+	if (active_cpu == cpunum)
+		*cpu[cpunum].icount -= cycles;
+}
+
+
+/*------------------------------------------------------
 	Get Current Frame
 ------------------------------------------------------*/
 

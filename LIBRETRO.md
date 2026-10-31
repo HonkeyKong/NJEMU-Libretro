@@ -173,6 +173,33 @@ EEPROM, SRAM and memory-card persistence stays file-backed. Failed loads do not
 commit machine persistent data. `RETRO_MEMORY_SAVE_RAM` is not exposed, avoiding
 a second writer over the emulator's serial EEPROM / combined persistent files.
 `RETRO_MEMORY_SYSTEM_RAM` exposes the main work RAM while content is loaded.
+After a successful load the core also registers `RETRO_ENVIRONMENT_SET_MEMORY_MAPS`
+descriptors for main, video and (MVS) save RAM.
+
+## libretro_ext frontend extension
+
+The cores export the optional, non-standard `libretro_ext` API from
+libretro-mame (`libretro_ext_get_api`, ABI 5, plus `libretro_ext_get_rollback_api`,
+ABI 1). The structures in `src/libretro/libretro_ext.h` are binary-compatible with
+libretro-mame, so a frontend can drive both cores with the same code. Frontends
+that don't look up these symbols are unaffected.
+
+- CPUs are `:maincpu` (68000) and `:audiocpu` (Z80). Memory access uses the
+  `program` space (and `io` for the Z80) through the machine's handlers. Register
+  ids follow MAME's numbering; named registers (D0-D7, A0-A7, SP, SR, PC) match it.
+- Regions are NJEMU's memory regions (`:maincpu`, `:audiocpu`, `:gfx1`, ...); shares
+  are the work, video and save RAM (`:mainram`, `:gfxram`, ...).
+- DIP switches (CPS1 and MVS) come from the per-game DIP tables. Ports are
+  `:DSWA`/`:DSWB`/`:DSWC` on CPS1 and `:DSW`/`:HARDDIP` on MVS (the PCB hard DIP
+  takes effect on reset). A value set through the API overrides the
+  `njemu_dip_*` core options until the next content load. CPS2 and NCDZ have none.
+- Watch and inject rules require `set_debug_extensions_enabled(true)` while content
+  is loaded; they hook the CPU data-access callbacks and cost nothing otherwise.
+  Outside CPS1 the Z80 reads ROM/RAM directly, so Z80 read watches/injects only see
+  CPS1 reads; Z80 writes are seen on all systems. As in MAME, 68000 inject rules
+  match word-wide accesses at the aligned address.
+- Static regions, rollback serialization and timing capture report themselves
+  unsupported, since this port has no save states.
 
 ## State support and remaining validation
 

@@ -138,6 +138,8 @@ typedef struct c68k_t
 	int32_t  (*Interrupt_CallBack)(int32_t irqline);
 	void (*Reset_CallBack)(void);
 
+	void (*Trace_CallBack)(uint32_t pc);	/* optional: called before each instruction */
+
 } c68k_struc;
 
 

@@ -241,6 +241,8 @@ typedef struct cz80_t
 
 	int32_t  (*Interrupt_Callback)(int32_t irqline);
 
+	void (*Trace_Callback)(uint32_t pc);	/* optional: called before each instruction */
+
 } cz80_struc;
 
 

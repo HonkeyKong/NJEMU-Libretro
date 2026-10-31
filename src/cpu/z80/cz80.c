@@ -252,6 +252,8 @@ Cz80_Exec:
 	if (CPU->ICount > 0)
 	{
 Cz80_Exec_nocheck:
+		if (CPU->Trace_Callback)
+			CPU->Trace_Callback(zRealPC);
 		data = pzHL;
 		Opcode = READ_OP();
 #if CZ80_EMULATE_R_EXACTLY

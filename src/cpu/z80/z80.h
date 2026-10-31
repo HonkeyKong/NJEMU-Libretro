@@ -24,6 +24,7 @@ void z80_init(void);
 void z80_reset(void);
 void z80_exit(void);
 int  z80_execute(int cycles);
+uint64_t z80_get_total_cycles(void);
 void z80_set_irq_line(int irqline, int state);
 void z80_set_irq_callback(int32_t (*callback)(int32_t irqline));
 uint32_t  z80_get_reg(int regnum);

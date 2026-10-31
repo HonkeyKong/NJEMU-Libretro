@@ -1,6 +1,7 @@
 #undef NDEBUG
 #define _XOPEN_SOURCE 700
 #include "libretro.h"
+#include "libretro_ext.h"
 #include <assert.h>
 #include <dlfcn.h>
 #include <dirent.h>
@@ -15,6 +16,7 @@ static char system_dir[4096], save_dir[4096];
 static unsigned videos, polls, rotation, messages, batches;
 static size_t samples;
 static int reject_pixels, short_audio;
+static unsigned memory_maps;
 static struct retro_system_av_info av;
 static void log_cb(enum retro_log_level level, const char *fmt, ...)
 {
@@ -37,6 +39,7 @@ static bool env(unsigned cmd, void *data)
         unsigned n=0; while (p[n].description) { assert(p[n].port < 4); assert(++n <= 64); } return true;
     }
     case RETRO_ENVIRONMENT_SET_VARIABLES: return true;
+    case RETRO_ENVIRONMENT_SET_MEMORY_MAPS: memory_maps=((const struct retro_memory_map *)data)->num_descriptors; return true;
     case RETRO_ENVIRONMENT_SHUTDOWN: fprintf(stderr,"Unexpected core shutdown\n"); abort();
     default: return false;
     }
@@ -75,6 +78,86 @@ static unsigned count_fds(void)
     unsigned n=0; struct dirent *entry;
     while ((entry=readdir(d))) if (entry->d_name[0]!='.') ++n;
     closedir(d); return n;
+}
+/* libretro_ext: optional frontend extension API (ABI shared with libretro-mame). */
+static void check_ext(void *handle, const char *library, uint16_t *ram, void (*run)(void), void (*reset)(void))
+{
+    const struct libretro_ext_api *(*get_api)(void)=(const struct libretro_ext_api *(*)(void))dlsym(handle,"libretro_ext_get_api");
+    const struct libretro_ext_rollback_api *(*get_rollback)(void)=(const struct libretro_ext_rollback_api *(*)(void))dlsym(handle,"libretro_ext_get_rollback_api");
+    assert(get_api && get_rollback && dlsym(handle,"libretro_ext_get_api_v5"));
+    const struct libretro_ext_api *api=get_api();
+    assert(api->abi_version==5 && api->sizeof_struct==sizeof(struct libretro_ext_api));
+    assert(!get_rollback()->get_info(NULL) && !api->get_rollback_serialize_size());
+    if (!ram) {
+        /* No machine: every entry point must be safe and report nothing. */
+        assert(!api->get_driver_name() && !api->get_cpu_count() && !api->get_cpu_tag(0));
+        assert(!api->get_region_count() && !api->get_share_count() && !api->get_dip_count());
+        assert(!api->read_u16(":maincpu","program",0xff0000));
+        api->set_debug_extensions_enabled(true);
+        api->add_watch_rule(":maincpu",0,1,LIBRETRO_EXT_WATCH_WRITE,0);
+        api->set_debug_extensions_enabled(false);
+        return;
+    }
+    assert(api->get_driver_name() && api->get_cpu_count()==2);
+    assert(!strcmp(api->get_cpu_tag(0),":maincpu") && !strcmp(api->get_cpu_tag(1),":audiocpu"));
+    assert(api->get_region_size(":maincpu")>=0x10000 && api->get_region_size("maincpu")==api->get_region_size(":maincpu"));
+    uint8_t vectors[8]; assert(api->read_region(":maincpu",0,vectors,8)==8);
+    assert(api->read_u32(":maincpu","program",4)==0x100); /* reset PC from the fixture vector table */
+    assert(api->read_u16(":maincpu","program",0xff0000)==ram[0]);
+    api->write_u16(":maincpu","program",0xff0000,0xbeef); assert(ram[0]==0xbeef);
+    uint16_t share; assert(api->read_share(":mainram",0,&share,2)==2 && share==0xbeef);
+    assert(api->get_share_size(":mainram")==0x10000 && memory_maps>0);
+    uint64_t pc=0, value=0;
+    assert(api->read_cpu_register_by_tag(":maincpu","PC",&pc) && pc==api->get_cpu_pc(0) && pc>=0x100 && pc<0x10c);
+    assert(api->write_cpu_register_by_tag(":maincpu","d3",0x12345678) && api->read_cpu_state_u64_by_tag(":maincpu",14+3,&value) && value==0x12345678);
+    assert(!api->read_cpu_register_by_tag(":audiocpu","D0",&value) && api->read_cpu_state_u64_by_index(1,-1,&value));
+    uint64_t cycles=api->get_cpu_total_cycles_by_tag(":maincpu");
+    run(); assert(api->get_cpu_total_cycles_by_tag(":maincpu")>cycles && api->get_frame_number()>0);
+
+    /* Watch: the fixture loops on addq.w #1,$ff0000 at 0x104. */
+    api->set_debug_extensions_enabled(true);
+    api->add_watch_rule(":maincpu",0xff0000,0xff0001,LIBRETRO_EXT_WATCH_WRITE,2);
+    run();
+    struct libretro_ext_watch_hit hit;
+    assert(api->get_last_watch_hit(&hit) && !strcmp(hit.cpuTag,":maincpu"));
+    assert(hit.address==0xff0000 && hit.access==LIBRETRO_EXT_WATCH_WRITE && hit.width==2 && hit.pc==0x104);
+    assert(hit.historyCount==256 && hit.pcHistory[255]==0x104 && hit.value==ram[0]);
+    api->clear_last_watch_hit(); assert(!api->get_last_watch_hit(&hit));
+
+    /* Inject: every read of the counter returns 0x1233, so each write stores 0x1234. */
+    api->add_inject_rule(":maincpu",0xff0000,0xff0001,0x1233,2,false);
+    run(); assert(ram[0]==0x1234);
+    api->clear_inject_rules();
+    api->add_inject_rule_ex(":maincpu",0xff0000,0xff0001,0x7000,0,true,true,0xffff,0xffff); /* never matches */
+    run(); assert(ram[0]!=0x7001 && ram[0]!=0x1234);
+    api->clear_inject_rules(); api->clear_watch_rules();
+    api->set_debug_extensions_enabled(false);
+    assert(!api->get_debug_extensions_enabled());
+
+    int dips=api->get_dip_count();
+    if (strstr(library,"CPS1")) assert(dips>0);
+    if (strstr(library,"CPS2")) assert(dips==0);
+    for (int i=0;i<dips;++i) {
+        struct libretro_ext_dip_info dip;
+        assert(api->get_dip_info(i,&dip) && dip.name[0] && dip.port_tag[0] && dip.mask);
+        assert(dip.setting_count>=2 && dip.setting_count<=LIBRETRO_EXT_DIP_MAX_SETTINGS);
+        assert(!(dip.current_value&~dip.mask) && dip.default_value==(0xff&dip.mask));
+        for (unsigned v=0;v<dip.setting_count;++v) assert(dip.settings[v].name[0] && !(dip.settings[v].value&~dip.mask));
+        if (getenv("NJEMU_TEST_LOG")) {
+            fprintf(stderr,"dip %s %s mask=%02x current=%02x:",dip.port_tag,dip.name,(unsigned)dip.mask,(unsigned)dip.current_value);
+            for (unsigned v=0;v<dip.setting_count;++v) fprintf(stderr," [%s=%02x]",dip.settings[v].name,(unsigned)dip.settings[v].value);
+            fputc('\n',stderr);
+        }
+    }
+    if (dips) {
+        struct libretro_ext_dip_info dip; assert(api->get_dip_info(0,&dip));
+        uint32_t target=dip.settings[dip.setting_count-1].value;
+        if (target==dip.current_value) target=dip.settings[0].value;
+        assert(api->set_dip_value(0,target));
+        reset(); /* core options are re-read on reset; the ext setting must survive */
+        assert(api->get_dip_info(0,&dip) && dip.current_value==target);
+    }
+    assert(!api->get_dip_info(dips,NULL) && !api->set_dip_value(-1,0));
 }
 #define FN(ret, name, args) ret (*name) args; *(void **)(&name)=dlsym(handle,#name); assert(name)
 int main(int argc, char **argv)
@@ -115,6 +198,7 @@ int main(int argc, char **argv)
     struct retro_system_info info; retro_get_system_info(&info);
     assert(info.need_fullpath && info.block_extract);
     retro_get_system_av_info(&av); assert(av.timing.fps>59 && av.timing.fps<=60);
+    check_ext(handle,info.library_name,NULL,retro_run,retro_reset);
     assert(!retro_serialize_size()); char invalid[4]={0};
     assert(!retro_serialize(invalid,sizeof(invalid)) && !retro_unserialize(invalid,sizeof(invalid)));
     assert(!retro_get_memory_data(RETRO_MEMORY_SAVE_RAM) && !retro_get_memory_size(RETRO_MEMORY_SAVE_RAM));
@@ -159,6 +243,7 @@ int main(int argc, char **argv)
             }
             assert(videos-start_videos==180 && polls-start_polls==180 && batches-start_batches==180);
             assert(fabs((double)(samples-start_samples)-180*av.timing.sample_rate/av.timing.fps)<2);
+            if (round==0) check_ext(handle,info.library_name,ram,retro_run,retro_reset);
             retro_reset(); retro_run(); retro_unload_game(); retro_unload_game();
         }
     }

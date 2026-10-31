@@ -154,6 +154,9 @@ C68k_Exec_Next:
 				}
 
 
+				if (CPU->Trace_CallBack)
+					CPU->Trace_CallBack(GET_PC());
+
 				Opcode = READ_IMM_16();
 				PC += 2;
 				goto *JumpTable[Opcode];

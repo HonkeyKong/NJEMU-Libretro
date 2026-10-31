@@ -65,8 +65,13 @@ static uint16_t m68000_read_pcrelative_16(uint32_t offset)
 	CPU Initialization
 --------------------------------------------------------*/
 
+static uint64_t m68000_total_cycles;
+static int32_t m68000_slice_cycles;
+
 void m68000_init(void)
 {
+	m68000_total_cycles = 0;
+	m68000_slice_cycles = 0;
 	C68k_Init(&C68K);
 	C68k_Set_ReadB(&C68K, m68000_read_memory_8);
 	C68k_Set_ReadW(&C68K, m68000_read_memory_16);
@@ -130,7 +135,25 @@ void m68000_exit(void)
 
 int m68000_execute(int cycles)
 {
-	return C68k_Exec(&C68K, cycles);
+	int ran;
+
+	m68000_slice_cycles = cycles;
+	ran = C68k_Exec(&C68K, cycles);
+	m68000_slice_cycles = 0;
+	m68000_total_cycles += ran;
+	return ran;
+}
+
+
+/*--------------------------------------------------------
+	Total Executed Cycles (includes the running slice)
+--------------------------------------------------------*/
+
+uint64_t m68000_get_total_cycles(void)
+{
+	if (m68000_slice_cycles)
+		return m68000_total_cycles + (m68000_slice_cycles - C68K.ICount);
+	return m68000_total_cycles;
 }
 
 

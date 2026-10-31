@@ -17,8 +17,13 @@
 	CPU Initialization
 --------------------------------------------------------*/
 
+static uint64_t z80_total_cycles;
+static int32_t z80_slice_cycles;
+
 void z80_init(void)
 {
+	z80_total_cycles = 0;
+	z80_slice_cycles = 0;
 	Cz80_Init(&CZ80);
 #if (EMU_SYSTEM == CPS1)
 	Cz80_Set_Fetch(&CZ80, 0x0000, 0xffff, (uintptr_t)memory_region_cpu2);
@@ -67,7 +72,25 @@ void z80_exit(void)
 
 int z80_execute(int cycles)
 {
-	return Cz80_Exec(&CZ80, cycles);
+	int ran;
+
+	z80_slice_cycles = cycles;
+	ran = Cz80_Exec(&CZ80, cycles);
+	z80_slice_cycles = 0;
+	z80_total_cycles += ran;
+	return ran;
+}
+
+
+/*--------------------------------------------------------
+	Total Executed Cycles (includes the running slice)
+--------------------------------------------------------*/
+
+uint64_t z80_get_total_cycles(void)
+{
+	if (z80_slice_cycles)
+		return z80_total_cycles + (z80_slice_cycles - CZ80.ICount);
+	return z80_total_cycles;
 }
 
 

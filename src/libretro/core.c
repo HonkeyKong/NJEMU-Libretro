@@ -1,5 +1,6 @@
 #include "emumain.h"
 #include "libretro.h"
+#include "libretro_ext.h"
 #include <errno.h>
 #include <ctype.h>
 #ifdef _WIN32
@@ -93,6 +94,7 @@ void lr_options(void)
     option_mp3_enable = strcmp(variable("njemu_cdda", "enabled"), "disabled") != 0;
     option_mp3_volume = 10;
 #endif
+    lr_ext_apply_dip_overrides();
 }
 static void register_options(void)
 {
@@ -287,6 +289,7 @@ static bool setup_paths(const char *content)
 }
 RETRO_API void retro_unload_game(void)
 {
+    lr_ext_reset();
     lr_machine_unload(); loaded = 0;
     if (video_data) { video_driver->free(video_data); video_data = NULL; }
     memset(pads, 0, sizeof(pads));
@@ -322,6 +325,7 @@ RETRO_API bool retro_load_game(const struct retro_game_info *game)
 #endif
     environment(RETRO_ENVIRONMENT_SET_ROTATION, &rotation);
     describe_inputs();
+    lr_ext_set_memory_maps(environment);
     struct retro_system_av_info av; retro_get_system_av_info(&av);
     environment(RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO, &av);
     return true;
@@ -335,6 +339,7 @@ RETRO_API void retro_run(void)
     if (input_poll) input_poll();
     for (unsigned p = 0; p < 4; ++p) for (unsigned id = 0; id < 16; ++id)
         pads[p][id] = input_state && devices[p] == RETRO_DEVICE_JOYPAD ? input_state(p, RETRO_DEVICE_JOYPAD, 0, id) : 0;
+    lr_ext_frame();
     lr_machine_frame(); ++lr_frame_number;
     lr_video_submit();
     if (video) video(lr_framebuffer, lr_width, lr_height, lr_width * sizeof(uint32_t));
